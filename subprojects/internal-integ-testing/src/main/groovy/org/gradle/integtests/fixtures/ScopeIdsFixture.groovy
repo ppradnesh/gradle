@@ -18,9 +18,19 @@ package org.gradle.integtests.fixtures
 
 import groovy.json.JsonSlurper
 import groovy.transform.EqualsAndHashCode
+import org.gradle.api.internal.tasks.execution.ExecuteTaskBuildOperationType
+import org.gradle.api.services.BuildService
+import org.gradle.api.services.BuildServiceParameters
 import org.gradle.integtests.fixtures.executer.GradleExecuter
 import org.gradle.integtests.fixtures.executer.UserInitScriptExecuterFixture
+import org.gradle.internal.build.event.BuildEventListenerRegistryInternal
 import org.gradle.internal.id.UniqueId
+import org.gradle.internal.operations.BuildOperationDescriptor
+import org.gradle.internal.operations.BuildOperationListener
+import org.gradle.internal.operations.OperationFinishEvent
+import org.gradle.internal.operations.OperationIdentifier
+import org.gradle.internal.operations.OperationProgressEvent
+import org.gradle.internal.operations.OperationStartEvent
 import org.gradle.internal.scopeids.id.BuildInvocationScopeId
 import org.gradle.internal.scopeids.id.UserScopeId
 import org.gradle.internal.scopeids.id.WorkspaceScopeId
@@ -92,35 +102,73 @@ class ScopeIdsFixture extends UserInitScriptExecuterFixture {
         getBuildPaths().last()
     }
 
+    @Override
+    String initScriptContent() {
+        """
+            interface ScopeIdCollectorParams extends ${BuildServiceParameters.name} {
+                RegularFileProperty getOutputJsonFile()
+            }
+
+            abstract class ScopeIdCollector implements ${BuildService.name}<ScopeIdCollectorParams>, ${BuildOperationListener.name}, AutoCloseable {
+
+                final Map<String, Object> scopeIds = new java.util.concurrent.ConcurrentHashMap<String, Object>()
+
+                @Override
+                void started($BuildOperationDescriptor.name buildOperation, $OperationStartEvent.name startEvent) {}
+
+                @Override
+                void finished($BuildOperationDescriptor.name buildOperation, $OperationFinishEvent.name finishEvent) {
+                    def result = finishEvent.result
+                    if (!(result instanceof $ExecuteTaskBuildOperationType.Result.name)) {
+                        return
+                    }
+                    def services = buildOperation.details.task.services
+                    def buildIdentity = services.get(Gradle).identityPath.toString()
+                    if (scopeIds.containsKey(buildIdentity)) {
+                        return
+                    }
+                    scopeIds[buildIdentity] = [
+                        buildInvocation: services.get(${BuildInvocationScopeId.name}).id.asString(),
+                        workspace: services.get(${WorkspaceScopeId.name}).id.asString(),
+                        user: services.get(${UserScopeId.name}).id.asString()
+                    ]
+                }
+
+                @Override
+                void progress(${OperationIdentifier.name} buildOperationId, ${OperationProgressEvent.name} progressEvent) {}
+
+                @Override
+                void close() {
+                    parameters.outputJsonFile.get().asFile << groovy.json.JsonOutput.toJson(scopeIds)
+                }
+            }
+
+            if (gradle.parent == null) {
+                def collector = gradle.sharedServices.registerIfAbsent("scopeIdCollector", ScopeIdCollector) {
+                    parameters.outputJsonFile.fileValue(new File("${normaliseFileSeparators(idsFile.absolutePath)}"))
+                }
+                gradle.services.get(${BuildEventListenerRegistryInternal.name}).onOperationCompletion(collector)
+            }
+        """
+    }
+
+    @Override
+    void configureExecuter(GradleExecuter executer) {
+        super.configureExecuter(executer)
+        executer.beforeExecute {
+            idsFile.delete()
+        }
+    }
+
     private TestFile getIdsFile() {
         testDir.testDirectory.file("ids.json")
     }
 
     @Override
-    String initScriptContent() {
-        """
-            def idsFile = file("${normaliseFileSeparators(idsFile.absolutePath)}")
-            if (gradle.parent == null) {
-                idsFile.delete()
-            }
-            def record = [
-                "\${gradle.identityPath}": [
-                    buildInvocation: gradle.services.get(${BuildInvocationScopeId.name}).id.asString(),
-                    workspace: gradle.services.get(${WorkspaceScopeId.name}).id.asString(),
-                    user: gradle.services.get(${UserScopeId.name}).id.asString()
-                ]
-            ]
-            idsFile << groovy.json.JsonOutput.toJson(record) + '\\n'
-        """
-    }
-
-    @Override
     void afterBuild() {
-        Map<String, Map<String, String>> idsMap = idsFile.readLines()
-            .collect { line -> new JsonSlurper().parse(new StringReader(line)) as Map<String, Map<String, String>> }
-            .collectMany { it.entrySet() }
-            .collectEntries { it }
         Map<String, ScopeIds> ids = [:]
+        Map<String, Map<String, String>> idsMap = new JsonSlurper().parse(idsFile)
+
         idsMap.each {
             ids[it.key] = new ScopeIds(
                 UniqueId.from(it.value.buildInvocation),
