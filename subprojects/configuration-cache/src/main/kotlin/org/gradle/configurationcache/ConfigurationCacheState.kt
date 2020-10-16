@@ -89,17 +89,27 @@ class ConfigurationCacheState(
         val gradle = build.gradle
         withDebugFrame({ "Gradle" }) {
             writeString(gradle.rootProject.name)
-            writeBuildTreeState(gradle)
+        }
+        withDebugFrame({ "build cache" }) {
+            withGradleIsolate(gradle, userTypesCodec) {
+                writeBuildCacheConfiguration(gradle)
+            }
         }
         writeBuildState(build)
+        withDebugFrame({ "Gradle" }) {
+            writeBuildTreeState(gradle)
+        }
     }
 
     private
     suspend fun DefaultReadContext.readRootBuild(createBuild: (String) -> ConfigurationCacheBuild) {
         val rootProjectName = readString()
         val build = createBuild(rootProjectName)
-        readBuildTreeState(build.gradle)
+        withGradleIsolate(build.gradle, userTypesCodec) {
+            readBuildCacheConfiguration(build.gradle)
+        }
         readBuildState(build)
+        readBuildTreeState(build.gradle)
         build.prepareForTaskExecution()
     }
 
@@ -161,9 +171,6 @@ class ConfigurationCacheState(
             withDebugFrame({ "included builds" }) {
                 writeChildBuilds(gradle)
             }
-            withDebugFrame({ "build cache" }) {
-                writeBuildCacheConfiguration(gradle)
-            }
             withDebugFrame({ "cleanup registrations" }) {
                 writeBuildOutputCleanupRegistrations(gradle)
             }
@@ -176,7 +183,6 @@ class ConfigurationCacheState(
         withGradleIsolate(gradle, userTypesCodec) {
             // per build
             readChildBuildsOf(build)
-            readBuildCacheConfiguration(gradle)
             readBuildOutputCleanupRegistrations(gradle)
         }
     }
