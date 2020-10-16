@@ -18,19 +18,9 @@ package org.gradle.integtests.fixtures
 
 import groovy.json.JsonSlurper
 import groovy.transform.EqualsAndHashCode
-import org.gradle.api.internal.tasks.execution.ExecuteTaskBuildOperationType
-import org.gradle.api.services.BuildService
-import org.gradle.api.services.BuildServiceParameters
 import org.gradle.integtests.fixtures.executer.GradleExecuter
 import org.gradle.integtests.fixtures.executer.UserInitScriptExecuterFixture
-import org.gradle.internal.build.event.BuildEventListenerRegistryInternal
 import org.gradle.internal.id.UniqueId
-import org.gradle.internal.operations.BuildOperationDescriptor
-import org.gradle.internal.operations.BuildOperationListener
-import org.gradle.internal.operations.OperationFinishEvent
-import org.gradle.internal.operations.OperationIdentifier
-import org.gradle.internal.operations.OperationProgressEvent
-import org.gradle.internal.operations.OperationStartEvent
 import org.gradle.internal.scopeids.id.BuildInvocationScopeId
 import org.gradle.internal.scopeids.id.UserScopeId
 import org.gradle.internal.scopeids.id.WorkspaceScopeId
