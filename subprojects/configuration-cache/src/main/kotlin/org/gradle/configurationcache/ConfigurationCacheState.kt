@@ -89,16 +89,9 @@ class ConfigurationCacheState(
         val gradle = build.gradle
         withDebugFrame({ "Gradle" }) {
             writeString(gradle.rootProject.name)
-        }
-        withDebugFrame({ "build cache" }) {
-            withGradleIsolate(gradle, userTypesCodec) {
-                writeBuildCacheConfiguration(gradle)
-            }
-        }
-        writeBuildState(build)
-        withDebugFrame({ "Gradle" }) {
             writeBuildTreeState(gradle)
         }
+        writeBuildState(build)
     }
 
     private
@@ -106,10 +99,9 @@ class ConfigurationCacheState(
         val rootProjectName = readString()
         val build = createBuild(rootProjectName)
         withGradleIsolate(build.gradle, userTypesCodec) {
-            readBuildCacheConfiguration(build.gradle)
+            readBuildTreeState(build.gradle)
         }
         readBuildState(build)
-        readBuildTreeState(build.gradle)
         build.prepareForTaskExecution()
     }
 
@@ -148,6 +140,9 @@ class ConfigurationCacheState(
     suspend fun DefaultWriteContext.writeBuildTreeState(gradle: GradleInternal) {
         withGradleIsolate(gradle, userTypesCodec) {
             // per build tree
+            withDebugFrame({ "build cache" }) {
+                writeBuildCacheConfiguration(gradle)
+            }
             withDebugFrame({ "listener subscriptions" }) {
                 writeBuildEventListenerSubscriptions(gradle)
             }
@@ -159,6 +154,7 @@ class ConfigurationCacheState(
     suspend fun DefaultReadContext.readBuildTreeState(gradle: GradleInternal) {
         withGradleIsolate(gradle, userTypesCodec) {
             // per build tree
+            readBuildCacheConfiguration(gradle)
             readBuildEventListenerSubscriptions(gradle)
             readGradleEnterprisePluginManager(gradle)
         }
@@ -168,11 +164,11 @@ class ConfigurationCacheState(
     suspend fun DefaultWriteContext.writeGradleState(gradle: GradleInternal) {
         withGradleIsolate(gradle, userTypesCodec) {
             // per build
-            withDebugFrame({ "included builds" }) {
-                writeChildBuilds(gradle)
-            }
             withDebugFrame({ "cleanup registrations" }) {
                 writeBuildOutputCleanupRegistrations(gradle)
+            }
+            withDebugFrame({ "included builds" }) {
+                writeChildBuilds(gradle)
             }
         }
     }
@@ -182,8 +178,8 @@ class ConfigurationCacheState(
         val gradle = build.gradle
         withGradleIsolate(gradle, userTypesCodec) {
             // per build
-            readChildBuildsOf(build)
             readBuildOutputCleanupRegistrations(gradle)
+            readChildBuildsOf(build)
         }
     }
 

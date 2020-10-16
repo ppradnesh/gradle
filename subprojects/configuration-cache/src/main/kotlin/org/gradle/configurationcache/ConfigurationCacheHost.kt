@@ -40,6 +40,7 @@ import org.gradle.initialization.ClassLoaderScopeRegistry
 import org.gradle.initialization.DefaultProjectDescriptor
 import org.gradle.initialization.DefaultSettings
 import org.gradle.initialization.NotifyingBuildLoader
+import org.gradle.initialization.RootBuildCacheControllerSettingsProcessor
 import org.gradle.initialization.SettingsLocation
 import org.gradle.initialization.SettingsPreparer
 import org.gradle.initialization.TaskExecutionPreparer
@@ -223,7 +224,9 @@ class ConfigurationCacheHost internal constructor(
             // It may be better to instead point GE at the origin build that produced the cached task graph,
             // or replace this with a different event/op that carries this information and wraps some actual work
             return BuildOperationSettingsProcessor(
-                { _, _, _, _ -> createSettings() },
+                RootBuildCacheControllerSettingsProcessor { _, _, _, _ ->
+                    createSettings()
+                },
                 service()
             ).process(
                 gradle,
