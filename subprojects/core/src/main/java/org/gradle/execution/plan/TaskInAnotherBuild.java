@@ -31,6 +31,8 @@ import org.gradle.util.Path;
 import javax.annotation.Nullable;
 import java.util.Collections;
 import java.util.List;
+import java.util.Set;
+import java.util.function.Consumer;
 
 public abstract class TaskInAnotherBuild extends TaskNode {
 
@@ -135,8 +137,18 @@ public abstract class TaskInAnotherBuild extends TaskNode {
     }
 
     @Override
-    public void require() {
-        // Ignore
+    public void startExecution(Consumer<Node> nodeStartAction) {
+        // TODO
+    }
+
+    @Override
+    public void finishExecution(Consumer<Node> completionAction) {
+        // TODO
+    }
+
+    @Override
+    public void setExecutionFailure(@Nullable Throwable failure) {
+        // TODO
     }
 
     @Override
@@ -208,6 +220,15 @@ public abstract class TaskInAnotherBuild extends TaskNode {
         @Override
         public String getTaskPath() {
             return task.getPath();
+        }
+
+        @Override
+        public void resolveDependencies(TaskDependencyResolver dependencyResolver, Action<Node> processHardSuccessor) {
+            Set<Node> dependencies = dependencyResolver.resolveDependenciesFor(task, task.getTaskDependencies());
+            for (Node targetNode : dependencies) {
+                addDependencySuccessor(targetNode);
+                processHardSuccessor.execute(targetNode);
+            }
         }
     }
 
